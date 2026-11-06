@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>作品票選</title>
 <style>
-:root{--ink:#14202B;--bg:#F2F6F8;--acc:#0E7C86;--on:#fff;--mut:#5B6B77;--line:#D5DEE4}
-@media (prefers-color-scheme:dark){:root{--ink:#E8EEF2;--bg:#101A21;--acc:#3CC4CF;--on:#07181B;--mut:#9AABB7;--line:#26343E}}
+:root{--ink:#14202B;--bg:#F2F6F8;--acc:#0E7C86;--on:#fff;--mut:#5B6B77}
+@media (prefers-color-scheme:dark){:root{--ink:#E8EEF2;--bg:#101A21;--acc:#3CC4CF;--on:#07181B;--mut:#9AABB7}}
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
 main{width:100%;max-width:420px}
@@ -17,35 +17,62 @@ button{background:var(--acc);color:var(--on);font-weight:700}
 button:disabled{opacity:.6}
 button:focus-visible,select:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 select{background:var(--bg);color:var(--ink);margin-bottom:12px}
+.sm{margin:14px 0 0;font-size:.95rem}
 .err{color:#C0392B;margin:14px 0 0}
 </style>
 </head>
 <body>
 <main id="app"><p>載入中…</p></main>
+<script src="config.js"></script>
 <script>
-const API = "https://script.google.com/macros/s/AKfycbzWGh20UmX4MqMg1sRolg6-8Pr3XyTWmecoB9DQF54MMRACM7NpB21cAUbtQ7UgzNKG/exec";
-const KEY = "voted_ids";
+const KEY = "ticket";
 const app = document.getElementById("app");
+const qs = new URLSearchParams(location.search);
 const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const voted = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; } };
-const remember = id => { try { localStorage.setItem(KEY, JSON.stringify([...voted(), id])); } catch (e) {} };
 const who = w => w.author === "待確認" ? "" : w.author;
+const left = n => `你還有 ${n} 票`;
+const MSG = {
+  badticket: "這張票無法使用,請洽工作人員。",
+  limit: "這張票的票數已經用完,謝謝你的參與!",
+  bad: "資料有誤,請重新掃描 QR code。"
+};
 
-function show(w) {
-  if (voted().includes(w.id)) {
-    app.innerHTML = `<h1>已投票,謝謝!</h1><p>你已經投給「${esc(w.school)}」。這支手機對這件作品只能投一次。</p>`;
-    return;
-  }
+let ticket = (qs.get("t") || "").trim().toUpperCase();
+if (ticket) { try { localStorage.setItem(KEY, ticket); } catch (e) {} }
+else { try { ticket = localStorage.getItem(KEY) || ""; } catch (e) {} }
+
+const call = body => fetch(API, {method: "POST", headers: {"Content-Type": "text/plain"},
+  body: JSON.stringify({t: ticket, ...body})}).then(r => r.json());
+const note = (h, p) => { app.innerHTML = `<h1>${h}</h1><p>${p}</p>`; };
+
+function home(list, info) {
+  if (info.left <= 0) return note("票數已用完", MSG.limit);
+  app.innerHTML = `<h1>${left(info.left)}</h1><p>請掃描展位上的 QR code,選出你最喜歡的作品。每件作品只能投一次。</p>
+    <select id="sel"><option value="">或從清單選擇作品…</option>${list.map(w => `<option value="${w.id}">${esc(w.school)}${who(w) ? "|" + esc(who(w)) : ""}</option>`).join("")}</select>
+    <button id="ok">前往投票</button>`;
+  document.getElementById("ok").onclick = () => {
+    const w = list.find(x => x.id === document.getElementById("sel").value);
+    if (w) show(w, info);
+  };
+}
+
+function show(w, info) {
+  if (info.voted.includes(w.id)) return note("已投過這件作品", `${esc(w.school)}。${left(info.left)},可以再去看看其他作品。`);
+  if (info.left <= 0) return note("票數已用完", MSG.limit);
   app.innerHTML = `<h1>${esc(w.school)}</h1><p>${esc(who(w))}</p>
-    <button id="go">投給這件作品</button><div class="err" id="err"></div>`;
+    <button id="go">投給這件作品</button><div class="sm">${left(info.left)}</div><div class="err" id="err"></div>`;
   const btn = document.getElementById("go");
   btn.onclick = async () => {
     btn.disabled = true; btn.textContent = "送出中…";
     try {
-      const r = await fetch(API, {method: "POST", headers: {"Content-Type": "text/plain"}, body: JSON.stringify({id: w.id})});
-      const j = await r.json();
-      if (!j.ok) throw new Error("fail");
-      remember(w.id); show(w);
+      const j = await call({action: "vote", id: w.id});
+      if (j.ok) {
+        info = {left: j.left, voted: [...info.voted, w.id]};
+        return note("投票成功!", `${esc(w.school)}。${info.left > 0 ? left(info.left) + ",繼續逛其他展位吧。" : "你的票都投完了,謝謝!"}`);
+      }
+      if (j.err === "dup") { info.voted.push(w.id); return show(w, info); }
+      if (j.err === "limit") return note("票數已用完", MSG.limit);
+      throw new Error(j.err);
     } catch (e) {
       btn.disabled = false; btn.textContent = "投給這件作品";
       document.getElementById("err").textContent = "投票沒有送出,請確認網路後再按一次。";
@@ -53,21 +80,19 @@ function show(w) {
   };
 }
 
-function pick(list) {
-  app.innerHTML = `<h1>選擇要投票的作品</h1><p>也可以直接掃描展位上的 QR code。</p>
-    <select id="sel"><option value="">請選擇…</option>${list.map(w => `<option value="${w.id}">${esc(w.school)}${who(w) ? "|" + esc(who(w)) : ""}</option>`).join("")}</select>
-    <button id="ok">前往投票</button>`;
-  document.getElementById("ok").onclick = () => {
-    const w = list.find(x => x.id === document.getElementById("sel").value);
-    if (w) show(w);
-  };
+async function start() {
+  try {
+    const list = await fetch("schools.json").then(r => r.json());
+    if (!ticket) return note("請先領取票券", "請到入口領取票券,掃描票券上的 QR code,再掃描展位的 QR code 投票。");
+    const info = await call({action: "check"});
+    if (!info.ok) return note("票券無法使用", MSG[info.err] || MSG.badticket);
+    const w = list.find(x => x.id === qs.get("id"));
+    w ? show(w, info) : home(list, info);
+  } catch (e) {
+    note("讀取失敗", "請確認網路後重新掃描 QR code。");
+  }
 }
-
-fetch("schools.json").then(r => r.json()).then(list => {
-  const id = new URLSearchParams(location.search).get("id");
-  const w = list.find(x => x.id === id);
-  w ? show(w) : pick(list);
-}).catch(() => { app.innerHTML = "<h1>讀取失敗</h1><p>請重新掃描 QR code 或稍後再試。</p>"; });
+start();
 </script>
 </body>
 </html>

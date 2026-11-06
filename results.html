@@ -17,8 +17,8 @@ small{color:var(--mut)}
 </head>
 <body>
 <h1>票選結果</h1><p class="sub" id="sub">載入中…</p><div id="list"></div>
+<script src="config.js"></script>
 <script>
-const API = "https://script.google.com/macros/s/AKfycbzWGh20UmX4MqMg1sRolg6-8Pr3XyTWmecoB9DQF54MMRACM7NpB21cAUbtQ7UgzNKG/exec";
 const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 async function load() {
   try {

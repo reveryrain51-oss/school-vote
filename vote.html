@@ -12,11 +12,12 @@ body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:c
 main{width:100%;max-width:420px}
 h1{font-size:1.6rem;line-height:1.35;margin:0 0 8px}
 p{margin:0 0 28px;color:var(--mut);line-height:1.6}
-button,select{width:100%;font:inherit;font-size:1.15rem;padding:16px;border-radius:12px;border:2px solid var(--acc)}
+button,select,input{width:100%;font:inherit;font-size:1.15rem;padding:16px;border-radius:12px;border:2px solid var(--acc)}
 button{background:var(--acc);color:var(--on);font-weight:700}
 button:disabled{opacity:.6}
-button:focus-visible,select:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
-select{background:var(--bg);color:var(--ink);margin-bottom:12px}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+select,input{background:var(--bg);color:var(--ink);margin-bottom:12px}
+input{text-transform:uppercase;letter-spacing:.2em;text-align:center}
 .sm{margin:14px 0 0;font-size:.95rem}
 .err{color:#C0392B;margin:14px 0 0}
 </style>
@@ -80,12 +81,28 @@ function show(w, info) {
   };
 }
 
+function askTicket(msg) {
+  app.innerHTML = `<h1>請輸入票號</h1><p>票券上有 6 碼票號。如果你已經掃過票券卻看到這個畫面(例如換了瀏覽器),輸入票號即可繼續投票。</p>
+    <input id="tk" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="例如 AB3K7M">
+    <button id="ok">確認票號</button><div class="err">${msg || ""}</div>`;
+  document.getElementById("ok").onclick = () => {
+    ticket = document.getElementById("tk").value.trim().toUpperCase();
+    if (!ticket) return;
+    try { localStorage.setItem(KEY, ticket); } catch (e) {}
+    start();
+  };
+}
+
 async function start() {
   try {
     const list = await fetch("schools.json").then(r => r.json());
-    if (!ticket) return note("請先領取票券", "請到入口領取票券,掃描票券上的 QR code,再掃描展位的 QR code 投票。");
+    if (!ticket) return askTicket();
     const info = await call({action: "check"});
-    if (!info.ok) return note("票券無法使用", MSG[info.err] || MSG.badticket);
+    if (!info.ok) {
+      ticket = "";
+      try { localStorage.removeItem(KEY); } catch (e) {}
+      return askTicket(MSG[info.err] || MSG.badticket);
+    }
     const w = list.find(x => x.id === qs.get("id"));
     w ? show(w, info) : home(list, info);
   } catch (e) {

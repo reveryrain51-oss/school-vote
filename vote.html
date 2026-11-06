@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>作品票選</title>
+<style>
+:root{--ink:#14202B;--bg:#F2F6F8;--acc:#0E7C86;--on:#fff;--mut:#5B6B77;--line:#D5DEE4}
+@media (prefers-color-scheme:dark){:root{--ink:#E8EEF2;--bg:#101A21;--acc:#3CC4CF;--on:#07181B;--mut:#9AABB7;--line:#26343E}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+main{width:100%;max-width:420px}
+h1{font-size:1.6rem;line-height:1.35;margin:0 0 8px}
+p{margin:0 0 28px;color:var(--mut);line-height:1.6}
+button,select{width:100%;font:inherit;font-size:1.15rem;padding:16px;border-radius:12px;border:2px solid var(--acc)}
+button{background:var(--acc);color:var(--on);font-weight:700}
+button:disabled{opacity:.6}
+button:focus-visible,select:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+select{background:var(--bg);color:var(--ink);margin-bottom:12px}
+.err{color:#C0392B;margin:14px 0 0}
+</style>
+</head>
+<body>
+<main id="app"><p>載入中…</p></main>
+<script>
+const API = "https://script.google.com/macros/s/AKfycbzWGh20UmX4MqMg1sRolg6-8Pr3XyTWmecoB9DQF54MMRACM7NpB21cAUbtQ7UgzNKG/exec";
+const KEY = "voted_ids";
+const app = document.getElementById("app");
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const voted = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; } };
+const remember = id => { try { localStorage.setItem(KEY, JSON.stringify([...voted(), id])); } catch (e) {} };
+const who = w => w.author === "待確認" ? "" : w.author;
+
+function show(w) {
+  if (voted().includes(w.id)) {
+    app.innerHTML = `<h1>已投票,謝謝!</h1><p>你已經投給「${esc(w.school)}」。這支手機對這件作品只能投一次。</p>`;
+    return;
+  }
+  app.innerHTML = `<h1>${esc(w.school)}</h1><p>${esc(who(w))}</p>
+    <button id="go">投給這件作品</button><div class="err" id="err"></div>`;
+  const btn = document.getElementById("go");
+  btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = "送出中…";
+    try {
+      const r = await fetch(API, {method: "POST", headers: {"Content-Type": "text/plain"}, body: JSON.stringify({id: w.id})});
+      const j = await r.json();
+      if (!j.ok) throw new Error("fail");
+      remember(w.id); show(w);
+    } catch (e) {
+      btn.disabled = false; btn.textContent = "投給這件作品";
+      document.getElementById("err").textContent = "投票沒有送出,請確認網路後再按一次。";
+    }
+  };
+}
+
+function pick(list) {
+  app.innerHTML = `<h1>選擇要投票的作品</h1><p>也可以直接掃描展位上的 QR code。</p>
+    <select id="sel"><option value="">請選擇…</option>${list.map(w => `<option value="${w.id}">${esc(w.school)}${who(w) ? "|" + esc(who(w)) : ""}</option>`).join("")}</select>
+    <button id="ok">前往投票</button>`;
+  document.getElementById("ok").onclick = () => {
+    const w = list.find(x => x.id === document.getElementById("sel").value);
+    if (w) show(w);
+  };
+}
+
+fetch("schools.json").then(r => r.json()).then(list => {
+  const id = new URLSearchParams(location.search).get("id");
+  const w = list.find(x => x.id === id);
+  w ? show(w) : pick(list);
+}).catch(() => { app.innerHTML = "<h1>讀取失敗</h1><p>請重新掃描 QR code 或稍後再試。</p>"; });
+</script>
+</body>
+</html>

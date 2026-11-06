@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>票選結果</title>
+<style>
+:root{--ink:#14202B;--bg:#F2F6F8;--acc:#0E7C86;--mut:#5B6B77;--line:#D5DEE4}
+@media (prefers-color-scheme:dark){:root{--ink:#E8EEF2;--bg:#101A21;--acc:#3CC4CF;--mut:#9AABB7;--line:#26343E}}
+body{margin:0;padding:24px;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+h1{margin:0 0 4px}.sub{color:var(--mut);margin:0 0 20px}
+.row{display:grid;grid-template-columns:2.5em 1fr 4em;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.bar{height:6px;margin-top:6px;background:var(--acc);border-radius:3px}
+.n{text-align:right;font-weight:700;font-size:1.2rem}.r{color:var(--mut)}
+small{color:var(--mut)}
+</style>
+</head>
+<body>
+<h1>票選結果</h1><p class="sub" id="sub">載入中…</p><div id="list"></div>
+<script>
+const API = "https://script.google.com/macros/s/AKfycbzWGh20UmX4MqMg1sRolg6-8Pr3XyTWmecoB9DQF54MMRACM7NpB21cAUbtQ7UgzNKG/exec";
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function load() {
+  try {
+    const [schools, counts] = await Promise.all([fetch("schools.json").then(r => r.json()), fetch(API).then(r => r.json())]);
+    const rows = schools.map(s => ({...s, n: counts[s.id] || 0})).sort((a, b) => b.n - a.n);
+    const total = rows.reduce((t, r) => t + r.n, 0), max = rows[0].n || 1;
+    document.getElementById("sub").textContent = `共 ${total} 票,每 10 秒自動更新`;
+    document.getElementById("list").innerHTML = rows.map((r, i) => `<div class="row"><span class="r">${i + 1}</span>
+      <div>${esc(r.school)} <small>${r.author === "待確認" ? "" : esc(r.author)}</small><div class="bar" style="width:${r.n / max * 100}%"></div></div>
+      <span class="n">${r.n}</span></div>`).join("");
+  } catch (e) { document.getElementById("sub").textContent = "目前無法讀取結果。"; }
+}
+load(); setInterval(load, 10000);
+</script>
+</body>
+</html>
